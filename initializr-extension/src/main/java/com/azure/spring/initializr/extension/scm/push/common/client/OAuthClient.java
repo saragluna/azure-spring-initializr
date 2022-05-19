@@ -1,6 +1,7 @@
-package com.azure.spring.initializr.extension.scm.push.common.restclient;
+package com.azure.spring.initializr.extension.scm.push.common.client;
 
 import com.azure.spring.initializr.extension.scm.push.common.model.TokenResult;
+import org.springframework.lang.NonNull;
 
 public interface OAuthClient {
     /**
@@ -9,5 +10,6 @@ public interface OAuthClient {
      * @param code authorization Code
      * @return
      */
+    @NonNull
     TokenResult getAccessToken(String code);
 }

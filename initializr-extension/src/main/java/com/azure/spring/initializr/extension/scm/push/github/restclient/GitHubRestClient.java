@@ -2,7 +2,7 @@ package com.azure.spring.initializr.extension.scm.push.github.restclient;
 
 import com.azure.spring.initializr.extension.scm.push.common.exception.OAuthAppException;
 import com.azure.spring.initializr.extension.scm.push.common.model.User;
-import com.azure.spring.initializr.extension.scm.push.common.restclient.GitClient;
+import com.azure.spring.initializr.extension.scm.push.common.client.GitRestClient;
 import com.azure.spring.initializr.web.project.ExtendProjectRequest;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -17,27 +17,29 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.util.HashMap;
 import java.util.Map;
 
-public class GitHubClient implements GitClient {
-    private static final Logger LOGGER = LoggerFactory.getLogger(GitHubClient.class);
+public class GitHubRestClient implements GitRestClient {
 
-    private static final String BASE_URI = "https://api.github.com";
-    private static final String CREATE_REPO_PATH = BASE_URI + "/user/repos";
-    private static final String GET_USER_PATH = BASE_URI + "/user";
+    private static final Logger LOGGER = LoggerFactory.getLogger(GitHubRestClient.class);
+    private static final String API_BASE_URI = "https://api.github.com";
+    private static final String CREATE_REPO_PATH = API_BASE_URI + "/user/repos";
+    private static final String GET_USER_PATH = API_BASE_URI + "/user";
+    private static final String REPO_EXISTS_PATTERN = API_BASE_URI + "/repos/%s/%s";
 
     private final WebClient webClient;
+    private final String accessToken;
 
-    public GitHubClient(WebClient webClient) {
+    public GitHubRestClient(String accessToken, WebClient webClient) {
+        this.accessToken = accessToken;
         this.webClient = webClient;
     }
 
     @Override
-    public User getUser(String accessToken) {
-        Assert.notNull(accessToken, "Invalid accessToken.");
+    public User getUser() {
         try {
             return webClient
                     .get()
                     .uri(GET_USER_PATH)
-                    .header("Authorization", getToken(accessToken))
+                    .header("Authorization", getToken())
                     .accept(MediaType.APPLICATION_JSON)
                     .retrieve()
                     .bodyToMono(User.class)
@@ -49,11 +51,9 @@ public class GitHubClient implements GitClient {
     }
 
     @Override
-    public String createRepository(String accessToken, User user, ExtendProjectRequest request) {
-        Assert.notNull(accessToken, "Invalid accessToken.");
+    public String createRepository(User user, ExtendProjectRequest request) {
         Assert.notNull(request, "Invalid request.");
         Assert.notNull(user, "Invalid user.");
-
         try {
             Map<String, String> map = new HashMap<>();
             map.put("name", request.getArtifactId());
@@ -64,7 +64,7 @@ public class GitHubClient implements GitClient {
                         .uri(CREATE_REPO_PATH)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(BodyInserters.fromValue(map))
-                        .header("Authorization", getToken(accessToken))
+                        .header("Authorization", getToken())
                         .accept(MediaType.APPLICATION_JSON)
                         .retrieve()
                         .bodyToMono(CreatedRepository.class)
@@ -77,19 +77,14 @@ public class GitHubClient implements GitClient {
     }
 
     @Override
-    public boolean repositoryExists(String accessToken, User user, ExtendProjectRequest request) {
-        Assert.notNull(accessToken, "Invalid accessToken.");
+    public boolean repositoryExists(User user, ExtendProjectRequest request) {
         Assert.notNull(user, "Invalid user.");
         Assert.notNull(request, "Invalid request.");
         try {
             HttpStatus httpStatus = webClient
                                          .get()
-                                         .uri(BASE_URI
-                                                + "/repos/"
-                                                + user.getUsername()
-                                                + "/"
-                                                + request.getArtifactId())
-                                         .header("Authorization", getToken(accessToken))
+                                         .uri(String.format(REPO_EXISTS_PATTERN, user.getUsername(), request.getArtifactId()))
+                                         .header("Authorization", getToken())
                                          .accept(MediaType.APPLICATION_JSON)
                                          .exchange()
                                          .block()
@@ -101,8 +96,8 @@ public class GitHubClient implements GitClient {
         }
     }
 
-    private String getToken(String accessToken) {
-        return "token " + accessToken;
+    private String getToken() {
+        return "token " + this.accessToken;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
